@@ -29,6 +29,7 @@ import datetime
 import re
 from StringIO import StringIO
 from pg8000 import DBAPI
+from crate import client
 
 # A scratch directory on your filesystem
 LOCAL_TMP_DIR = "/tmp"
@@ -43,10 +44,14 @@ QUERY_1a_HQL = "SELECT pageURL, pageRank FROM rankings WHERE pageRank > 1000"
 QUERY_1b_HQL = QUERY_1a_HQL.replace("1000", "100")
 QUERY_1c_HQL = QUERY_1a_HQL.replace("1000", "10")
 
-QUERY_2a_HQL = "SELECT SUBSTR(sourceIP, 1, 8), SUM(adRevenue) FROM " \
-                 "uservisits GROUP BY SUBSTR(sourceIP, 1, 8)"
+QUERY_2a_HQL = "SELECT SUBSTR(\"sourceIP\", 1, 8), SUM(\"adRevenue\") FROM " \
+                 "uservisits GROUP BY SUBSTR(\"sourceIP\", 1, 8)"
 QUERY_2b_HQL = QUERY_2a_HQL.replace("8", "10")
 QUERY_2c_HQL = QUERY_2a_HQL.replace("8", "12")
+# QUERY_2a_HQL = "SELECT date_trunc('year', \"visitDate\") as year, sum(\"adRevenue\") FROM " \
+#                  "uservisits GROUP BY date_trunc('year', \"visitDate\")"
+# QUERY_2b_HQL = QUERY_2a_HQL.replace("year", "month")
+# QUERY_2c_HQL = QUERY_2a_HQL.replace("year", "day")
 
 QUERY_3a_HQL = """SELECT sourceIP, 
                           sum(adRevenue) as totalRevenue, 
@@ -112,6 +117,16 @@ IMPALA_MAP = {'1a': QUERY_1_PRE, '1b': QUERY_1_PRE, '1c': QUERY_1_PRE,
               '2a': QUERY_2_PRE, '2b': QUERY_2_PRE, '2c': QUERY_2_PRE,
               '3a': QUERY_3_PRE, '3b': QUERY_3_PRE, '3c': QUERY_3_PRE}
 
+CRATE_MAP = {'1a': (QUERY_1_PRE, QUERY_1a_HQL, QUERY_1a_SQL),
+             '1b': (QUERY_1_PRE, QUERY_1b_HQL, QUERY_1b_SQL),
+             '1c': (QUERY_1_PRE, QUERY_1c_HQL, QUERY_1c_SQL),
+             '2a': (QUERY_2_PRE, QUERY_2a_HQL, QUERY_2a_SQL),
+             '2b': (QUERY_2_PRE, QUERY_2b_HQL, QUERY_2b_SQL),
+             '2c': (QUERY_2_PRE, QUERY_2c_HQL, QUERY_2c_SQL),
+             '3a': (QUERY_3_PRE, QUERY_3a_HQL, QUERY_3a_SQL),
+             '3b': (QUERY_3_PRE, QUERY_3b_HQL, QUERY_3b_SQL),
+             '3c': (QUERY_3_PRE, QUERY_3c_HQL, QUERY_3b_SQL)}
+
 QUERY_MAP = {
              '1a':  (create_as(QUERY_1a_HQL), insert_into(QUERY_1a_HQL), 
                      create_as(QUERY_1a_SQL)),
@@ -155,6 +170,8 @@ def parse_args():
       help="Whether to include Shark")
   parser.add_option("-r", "--redshift", action="store_true", default=False,
       help="Whether to include Redshift")
+  parser.add_option("-l", "--crate", action="store_true", default=False,
+      help="Whether to include Crate")
 
   parser.add_option("-g", "--shark-no-cache", action="store_true", 
       default=False, help="Disable caching in Shark")
@@ -171,6 +188,8 @@ def parse_args():
       help="Hostname of Shark master node")
   parser.add_option("-c", "--redshift-host",
       help="Hostname of Redshift ODBC endpoint")
+  parser.add_option("-d", "--crate-hosts",
+      help="Hostnames of Crate nodes (comma seperated)")
 
   parser.add_option("-x", "--impala-identity-file",
       help="SSH private key file to use for logging into Impala node")
@@ -189,9 +208,10 @@ def parse_args():
   parser.add_option("-q", "--query-num", default="1",
       help="Which query to run in benchmark")
 
+
   (opts, args) = parser.parse_args()
 
-  if not (opts.impala or opts.shark or opts.redshift):
+  if not (opts.impala or opts.shark or opts.redshift or opts.crate):
     parser.print_help()
     sys.exit(1)
 
@@ -214,10 +234,20 @@ def parse_args():
         "Redshift requires host, username, password and db"
     sys.exit(1)
 
+  if opts.crate and (opts.crate_hosts is None):
+    print >> stderr, \
+        "Crate requires hosts"
+    sys.exit(1)
+
   if opts.impala:
     hosts = opts.impala_hosts.split(",")
     print >> stderr, "Impala hosts:\n%s" % "\n".join(hosts)
     opts.impala_hosts = hosts
+
+  if opts.crate:
+    hosts = opts.crate_hosts.split(",")
+    print >> stderr, "Crate hosts:\n%s" % "\n".join(hosts)
+    opts.crate_hosts = hosts
 
   if opts.query_num not in QUERY_MAP:
     print >> stderr, "Unknown query number: %s" % opts.query_num
@@ -471,6 +501,28 @@ def run_redshift_benchmark(opts):
     cursor.execute(CLEAN_QUERY)
   return times
 
+
+def run_crate_benchmark(opts):
+  conn = client.connect(servers=opts.crate_hosts)
+  print >> stderr, "Connecting to Crate..."
+  cursor = conn.cursor()
+
+  print >> stderr, "Connection succeeded..."
+  times = []
+  # Clean up old table if still exists
+  try:
+    cursor.execute(CLEAN_QUERY.rstrip(';'))
+  except:
+    pass
+  for i in range(opts.num_trials):
+    t0 = time.time()
+    for q in CRATE_MAP[opts.query_num]:
+        cursor.execute(q.rstrip(';'))
+    times.append(time.time() - t0)
+    cursor.execute(CLEAN_QUERY.rstrip(';'))
+  return times
+
+
 def get_percentiles(in_list):
   def get_pctl(lst, pctl):
     return lst[int(len(lst) * pctl)]
@@ -509,6 +561,8 @@ def main():
     results, contents = run_shark_benchmark(opts)
   if opts.redshift:
     results = run_redshift_benchmark(opts)
+  if opts.crate:
+    results = run_crate_benchmark(opts)
 
   if opts.impala:
     if opts.clear_buffer_cache:
@@ -521,6 +575,8 @@ def main():
     fname = "shark_mem"
   elif opts.redshift:
     fname = "redshift"
+  elif opts.crate:
+    fname = "crate"
 
   def prettylist(lst):
     return ",".join([str(k) for k in lst]) 
@@ -532,7 +588,7 @@ def main():
   print >> output, "Results: %s" % prettylist(results)
   print >> output, "Percentiles: %s" % get_percentiles(results)
   print >> output, "Best: %s"  % min(results)
-  if not opts.redshift:
+  if not opts.redshift and not opts.crate:
     print >> output, "Contents: \n%s" % str(prettylist(contents))
 
   print output.getvalue()

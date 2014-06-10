@@ -1,0 +1,3 @@
+[submodule "submodules/crate-python"]
+	path = submodules/crate-python
+	url = git@github.com:crate/crate-python.git
