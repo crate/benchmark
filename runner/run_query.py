@@ -40,7 +40,7 @@ TMP_TABLE_CACHED = "result_cached"
 CLEAN_QUERY = "DROP TABLE %s;" % TMP_TABLE
 
 # TODO: Factor this out into a separate file
-QUERY_1a_HQL = "SELECT pageURL, pageRank FROM rankings WHERE pageRank > 1000"
+QUERY_1a_HQL = "SELECT \"pageURL\", \"pageRank\" FROM rankings WHERE \"pageRank\" > 1000"
 QUERY_1b_HQL = QUERY_1a_HQL.replace("1000", "100")
 QUERY_1c_HQL = QUERY_1a_HQL.replace("1000", "10")
 
@@ -48,10 +48,10 @@ QUERY_2a_HQL = "SELECT SUBSTR(\"sourceIP\", 1, 8), SUM(\"adRevenue\") FROM " \
                  "uservisits GROUP BY SUBSTR(\"sourceIP\", 1, 8)"
 QUERY_2b_HQL = QUERY_2a_HQL.replace("8", "10")
 QUERY_2c_HQL = QUERY_2a_HQL.replace("8", "12")
-# QUERY_2a_HQL = "SELECT date_trunc('year', \"visitDate\") as year, sum(\"adRevenue\") FROM " \
-#                  "uservisits GROUP BY date_trunc('year', \"visitDate\")"
-# QUERY_2b_HQL = QUERY_2a_HQL.replace("year", "month")
-# QUERY_2c_HQL = QUERY_2a_HQL.replace("year", "day")
+QUERY_2a_HQL = "SELECT date_trunc('year', \"visitDate\") as year, sum(\"adRevenue\") FROM " \
+                 "uservisits GROUP BY date_trunc('year', \"visitDate\")"
+QUERY_2b_HQL = QUERY_2a_HQL.replace("year", "month")
+QUERY_2c_HQL = QUERY_2a_HQL.replace("year", "day")
 
 QUERY_3a_HQL = """SELECT sourceIP, 
                           sum(adRevenue) as totalRevenue, 
@@ -120,9 +120,9 @@ IMPALA_MAP = {'1a': QUERY_1_PRE, '1b': QUERY_1_PRE, '1c': QUERY_1_PRE,
 CRATE_MAP = {'1a': (QUERY_1_PRE, QUERY_1a_HQL, QUERY_1a_SQL),
              '1b': (QUERY_1_PRE, QUERY_1b_HQL, QUERY_1b_SQL),
              '1c': (QUERY_1_PRE, QUERY_1c_HQL, QUERY_1c_SQL),
-             '2a': (QUERY_2_PRE, QUERY_2a_SQL, QUERY_2a_SQL),
-             '2b': (QUERY_2_PRE, QUERY_2b_SQL, QUERY_2b_SQL),
-             '2c': (QUERY_2_PRE, QUERY_2c_SQL, QUERY_2c_SQL),
+             '2a': (QUERY_2_PRE, QUERY_2a_HQL, QUERY_2a_HQL),
+             '2b': (QUERY_2_PRE, QUERY_2b_HQL, QUERY_2b_HQL),
+             '2c': (QUERY_2_PRE, QUERY_2c_HQL, QUERY_2c_HQL),
              '3a': (QUERY_3_PRE, QUERY_3a_HQL, QUERY_3a_SQL),
              '3b': (QUERY_3_PRE, QUERY_3b_HQL, QUERY_3b_SQL),
              '3c': (QUERY_3_PRE, QUERY_3c_HQL, QUERY_3b_SQL)}
