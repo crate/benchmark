@@ -48,10 +48,6 @@ QUERY_2a_HQL = "SELECT SUBSTR(\"sourceIP\", 1, 8), SUM(\"adRevenue\") FROM " \
                  "uservisits GROUP BY SUBSTR(\"sourceIP\", 1, 8)"
 QUERY_2b_HQL = QUERY_2a_HQL.replace("8", "10")
 QUERY_2c_HQL = QUERY_2a_HQL.replace("8", "12")
-QUERY_2a_HQL = "SELECT date_trunc('year', \"visitDate\") as year, sum(\"adRevenue\") FROM " \
-                 "uservisits GROUP BY date_trunc('year', \"visitDate\")"
-QUERY_2b_HQL = QUERY_2a_HQL.replace("year", "month")
-QUERY_2c_HQL = QUERY_2a_HQL.replace("year", "day")
 
 QUERY_3a_HQL = """SELECT sourceIP, 
                           sum(adRevenue) as totalRevenue, 
@@ -321,7 +317,9 @@ def run_shark_benchmark(opts):
     def convert_to_cached(query):
       return (make_output_cached(make_input_cached(query[0])), )
 
-    local_query_map = {k: convert_to_cached(v) for k, v in QUERY_MAP.items()}
+    local_query_map = {}
+    for k,v in QUERY_MAP.items():
+      local_query_map[k] = convert_to_cached(v)
 
     # Set up cached tables
     if '4' in opts.query_num:
