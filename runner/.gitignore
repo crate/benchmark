@@ -1,1 +1,8 @@
 results
+*.pyc
+.installed.cfg
+*.egg-info/
+bin/
+develop-eggs/
+parts/
+
