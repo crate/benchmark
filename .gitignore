@@ -1,2 +1,9 @@
 *.swp
+*.pyc
+*.egg-info/
 _site/
+results/
+deps/
+bin/
+parts/
+.installed.cfg

@@ -9,10 +9,8 @@ setup(
     name = 'benchmark',
     author = 'The Regents of The University California',
     author_email = '',
-#    namespace_packages = [],
-#    packages = find_packages('src'),
-#    package_dir = {'':'src'},
-#    install_requires = [],
+    packages = find_packages('runner'),
+    package_dir = {'':'runner'},
     entry_points = {
         'console_scripts': [
             'run-query = run_query:main',
