@@ -1,9 +1,9 @@
 *.swp
 *.pyc
 *.egg-info/
-_site/
+.installed.cfg
 results/
 deps/
 bin/
 parts/
-.installed.cfg
+develop-eggs/
