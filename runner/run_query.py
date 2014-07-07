@@ -29,6 +29,7 @@ import datetime
 import re
 from StringIO import StringIO
 from pg8000 import DBAPI
+from crate import client
 
 # A scratch directory on your filesystem
 LOCAL_TMP_DIR = "/tmp"
@@ -39,25 +40,27 @@ TMP_TABLE_CACHED = "result_cached"
 CLEAN_QUERY = "DROP TABLE %s;" % TMP_TABLE
 
 # TODO: Factor this out into a separate file
-QUERY_1a_HQL = "SELECT pageURL, pageRank FROM rankings WHERE pageRank > 1000"
+QUERY_1a_HQL = """SELECT "pageURL", "pageRank" FROM rankings WHERE "pageRank" > 1000"""
 QUERY_1b_HQL = QUERY_1a_HQL.replace("1000", "100")
 QUERY_1c_HQL = QUERY_1a_HQL.replace("1000", "10")
 
-QUERY_2a_HQL = "SELECT SUBSTR(sourceIP, 1, 8), SUM(adRevenue) FROM " \
-                 "uservisits GROUP BY SUBSTR(sourceIP, 1, 8)"
+QUERY_2_HQL = """SELECT SUBSTR("sourceIP", 1, 8), SUM("adRevenue")
+                 FROM uservisits
+                 GROUP BY SUBSTR("sourceIP", 1, 8)"""
+QUERY_2a_HQL = " ".join(QUERY_2_HQL.replace("\n", "").split())
 QUERY_2b_HQL = QUERY_2a_HQL.replace("8", "10")
 QUERY_2c_HQL = QUERY_2a_HQL.replace("8", "12")
 
-QUERY_3a_HQL = """SELECT sourceIP, 
-                          sum(adRevenue) as totalRevenue, 
-                          avg(pageRank) as pageRank 
+QUERY_3a_HQL = """SELECT sourceIP,
+                          sum(adRevenue) as totalRevenue,
+                          avg(pageRank) as pageRank
                    FROM
                      rankings R JOIN
-                     (SELECT sourceIP, destURL, adRevenue 
-                      FROM uservisits UV 
+                     (SELECT sourceIP, destURL, adRevenue
+                      FROM uservisits UV
                       WHERE UV.visitDate > "1980-01-01"
-                      AND UV.visitDate < "1980-04-01") 
-                      NUV ON (R.pageURL = NUV.destURL) 
+                      AND UV.visitDate < "1980-04-01")
+                      NUV ON (R.pageURL = NUV.destURL)
                    GROUP BY sourceIP
                    ORDER BY totalRevenue DESC
                    LIMIT 1"""
@@ -66,20 +69,19 @@ QUERY_3b_HQL = QUERY_3a_HQL.replace("1980-04-01", "1983-01-01")
 QUERY_3c_HQL = QUERY_3a_HQL.replace("1980-04-01", "2010-01-01")
 
 QUERY_4_HQL = """DROP TABLE IF EXISTS url_counts_partial;
-                 CREATE TABLE url_counts_partial AS 
-                   SELECT TRANSFORM (line) 
-                   USING "python /root/url_count.py" as (sourcePage, 
+                 CREATE TABLE url_counts_partial AS
+                   SELECT TRANSFORM (line)
+                   USING "python /root/url_count.py" as (sourcePage,
                      destPage, count) from documents;
                  DROP TABLE IF EXISTS url_counts_total;
-                 CREATE TABLE url_counts_total AS 
-                   SELECT SUM(count) AS totalCount, destpage 
+                 CREATE TABLE url_counts_total AS
+                   SELECT SUM(count) AS totalCount, destpage
                    FROM url_counts_partial GROUP BY destpage;"""
 QUERY_4_HQL = " ".join(QUERY_4_HQL.replace("\n", "").split())
 
-QUERY_1_PRE = "CREATE TABLE %s (pageURL STRING, pageRank INT);" % TMP_TABLE
-QUERY_2_PRE = "CREATE TABLE %s (sourceIP STRING, adRevenue DOUBLE);" % TMP_TABLE
-QUERY_3_PRE = "CREATE TABLE %s (sourceIP STRING, " \
-    "adRevenue DOUBLE, pageRank DOUBLE);" % TMP_TABLE
+QUERY_1_PRE = """CREATE TABLE %s ("pageURL" STRING, "pageRank" INT);""" % TMP_TABLE
+QUERY_2_PRE = """CREATE TABLE %s ("sourceIP" STRING, "adRevenue" DOUBLE);""" % TMP_TABLE
+QUERY_3_PRE = """CREATE TABLE %s ("sourceIP" STRING, "adRevenue" DOUBLE, "pageRank" DOUBLE);""" % TMP_TABLE
 
 QUERY_1a_SQL = QUERY_1a_HQL
 QUERY_1b_SQL = QUERY_1b_HQL
@@ -95,7 +97,7 @@ QUERY_3a_SQL = """SELECT sourceIP, totalRevenue, avgPageRank
                               SUM(adRevenue) as totalRevenue
                       FROM Rankings AS R, UserVisits AS UV
                       WHERE R.pageURL = UV.destinationURL
-                      AND UV.visitDate 
+                      AND UV.visitDate
                         BETWEEN Date('1980-01-01') AND Date('1980-04-01')
                       GROUP BY UV.sourceIP)
                    ORDER BY totalRevenue DESC LIMIT 1""".replace("\n", "")
@@ -105,12 +107,29 @@ QUERY_3c_SQL = QUERY_3a_SQL.replace("1980-04-01", "2010-01-01")
 
 def create_as(query):
   return "CREATE TABLE %s AS %s;" % (TMP_TABLE, query)
+
 def insert_into(query):
   return "INSERT INTO TABLE %s %s;" % (TMP_TABLE, query)
+
+def crate_tmp_table(query, num_shards=48):
+  return "%s clustered into %d shards WITH (number_of_replicas=0, refresh_interval=0)" % (query, num_shards)
+
+def crate_insert_into_rankings(query):
+  return """INSERT INTO %s ("pageURL", "pageRank") (%s)""" % (TMP_TABLE, query)
+
+def crate_insert_into_uservisits(query):
+  return """INSERT INTO %s ("sourceIP", "adRevenue") (%s)""" % (TMP_TABLE, query)
 
 IMPALA_MAP = {'1a': QUERY_1_PRE, '1b': QUERY_1_PRE, '1c': QUERY_1_PRE,
               '2a': QUERY_2_PRE, '2b': QUERY_2_PRE, '2c': QUERY_2_PRE,
               '3a': QUERY_3_PRE, '3b': QUERY_3_PRE, '3c': QUERY_3_PRE}
+
+CRATE_MAP = {'1a': (crate_tmp_table(QUERY_1_PRE, 48), crate_insert_into_rankings(QUERY_1a_HQL)),
+             '1b': (crate_tmp_table(QUERY_1_PRE, 48), crate_insert_into_rankings(QUERY_1b_HQL)),
+             '1c': (crate_tmp_table(QUERY_1_PRE, 48), crate_insert_into_rankings(QUERY_1c_HQL)),
+             '2a': (crate_tmp_table(QUERY_2_PRE, 96), crate_insert_into_uservisits(QUERY_2a_HQL)),
+             '2b': (crate_tmp_table(QUERY_2_PRE, 96), crate_insert_into_uservisits(QUERY_2b_HQL)),
+             '2c': (crate_tmp_table(QUERY_2_PRE, 96), crate_insert_into_uservisits(QUERY_2c_HQL))}
 
 QUERY_MAP = {
              '1a':  (create_as(QUERY_1a_HQL), insert_into(QUERY_1a_HQL), 
@@ -155,6 +174,8 @@ def parse_args():
       help="Whether to include Shark")
   parser.add_option("-r", "--redshift", action="store_true", default=False,
       help="Whether to include Redshift")
+  parser.add_option("-l", "--crate", action="store_true", default=False,
+      help="Whether to include Crate")
 
   parser.add_option("-g", "--shark-no-cache", action="store_true", 
       default=False, help="Disable caching in Shark")
@@ -171,6 +192,8 @@ def parse_args():
       help="Hostname of Shark master node")
   parser.add_option("-c", "--redshift-host",
       help="Hostname of Redshift ODBC endpoint")
+  parser.add_option("-d", "--crate-hosts",
+      help="Hostnames of Crate nodes (comma seperated)")
 
   parser.add_option("-x", "--impala-identity-file",
       help="SSH private key file to use for logging into Impala node")
@@ -189,9 +212,10 @@ def parse_args():
   parser.add_option("-q", "--query-num", default="1",
       help="Which query to run in benchmark")
 
+
   (opts, args) = parser.parse_args()
 
-  if not (opts.impala or opts.shark or opts.redshift):
+  if not (opts.impala or opts.shark or opts.redshift or opts.crate):
     parser.print_help()
     sys.exit(1)
 
@@ -214,10 +238,19 @@ def parse_args():
         "Redshift requires host, username, password and db"
     sys.exit(1)
 
+  if opts.crate and (opts.crate_hosts is None):
+    print >> stderr, "Crate requires hosts"
+    sys.exit(1)
+
   if opts.impala:
     hosts = opts.impala_hosts.split(",")
     print >> stderr, "Impala hosts:\n%s" % "\n".join(hosts)
     opts.impala_hosts = hosts
+
+  if opts.crate:
+    hosts = opts.crate_hosts.split(",")
+    print >> stderr, "Crate hosts:\n%s" % "\n".join(hosts)
+    opts.crate_hosts = hosts
 
   if opts.query_num not in QUERY_MAP:
     print >> stderr, "Unknown query number: %s" % opts.query_num
@@ -291,7 +324,9 @@ def run_shark_benchmark(opts):
     def convert_to_cached(query):
       return (make_output_cached(make_input_cached(query[0])), )
 
-    local_query_map = {k: convert_to_cached(v) for k, v in QUERY_MAP.items()}
+    local_query_map = {}
+    for k,v in QUERY_MAP.items():
+      local_query_map[k] = convert_to_cached(v)
 
     # Set up cached tables
     if '4' in opts.query_num:
@@ -471,6 +506,34 @@ def run_redshift_benchmark(opts):
     cursor.execute(CLEAN_QUERY)
   return times
 
+
+def run_crate_benchmark(opts):
+  conn = client.connect(servers=opts.crate_hosts)
+  print >> stderr, "Connecting to Crate..."
+  cursor = conn.cursor()
+
+  print >> stderr, "Connection succeeded..."
+  times = []
+  # Clean up old table if still exists
+  try:
+    cursor.execute(CLEAN_QUERY.rstrip(';'))
+  except:
+    pass
+
+  for _ in range(opts.num_trials):
+    cursor.execute(CRATE_MAP[opts.query_num][0].rstrip(';'))
+    cursor.execute(CRATE_MAP[opts.query_num][1].rstrip(';'))
+    duration = float(cursor.duration) / 1000.0
+    times.append(duration)
+    # for debugging purposes
+    cursor.execute('REFRESH TABLE %s' % TMP_TABLE)
+    cursor.execute('SELECT count(*) from %s' % TMP_TABLE)
+    result = cursor.fetchone()
+    print >> stderr, '{0} records'.format(result[0])
+    cursor.execute(CLEAN_QUERY.rstrip(';'))
+  return times
+
+
 def get_percentiles(in_list):
   def get_pctl(lst, pctl):
     return lst[int(len(lst) * pctl)]
@@ -509,6 +572,8 @@ def main():
     results, contents = run_shark_benchmark(opts)
   if opts.redshift:
     results = run_redshift_benchmark(opts)
+  if opts.crate:
+    results = run_crate_benchmark(opts)
 
   if opts.impala:
     if opts.clear_buffer_cache:
@@ -521,6 +586,8 @@ def main():
     fname = "shark_mem"
   elif opts.redshift:
     fname = "redshift"
+  elif opts.crate:
+    fname = "crate"
 
   def prettylist(lst):
     return ",".join([str(k) for k in lst]) 
@@ -532,7 +599,7 @@ def main():
   print >> output, "Results: %s" % prettylist(results)
   print >> output, "Percentiles: %s" % get_percentiles(results)
   print >> output, "Best: %s"  % min(results)
-  if not opts.redshift:
+  if not opts.redshift and not opts.crate:
     print >> output, "Contents: \n%s" % str(prettylist(contents))
 
   print output.getvalue()
