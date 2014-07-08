@@ -79,9 +79,9 @@ QUERY_4_HQL = """DROP TABLE IF EXISTS url_counts_partial;
                    FROM url_counts_partial GROUP BY destpage;"""
 QUERY_4_HQL = " ".join(QUERY_4_HQL.replace("\n", "").split())
 
-QUERY_1_PRE = """CREATE TABLE %s ("pageURL" STRING, "pageRank" INT);""" % TMP_TABLE
-QUERY_2_PRE = """CREATE TABLE %s ("sourceIP" STRING, "adRevenue" DOUBLE);""" % TMP_TABLE
-QUERY_3_PRE = """CREATE TABLE %s ("sourceIP" STRING, "adRevenue" DOUBLE, "pageRank" DOUBLE);""" % TMP_TABLE
+QUERY_1_PRE = """CREATE TABLE %s ("pageURL" STRING, "pageRank" INT)""" % TMP_TABLE
+QUERY_2_PRE = """CREATE TABLE %s ("sourceIP" STRING, "adRevenue" DOUBLE)""" % TMP_TABLE
+QUERY_3_PRE = """CREATE TABLE %s ("sourceIP" STRING, "adRevenue" DOUBLE, "pageRank" DOUBLE)""" % TMP_TABLE
 
 QUERY_1a_SQL = QUERY_1a_HQL
 QUERY_1b_SQL = QUERY_1b_HQL
@@ -529,7 +529,7 @@ def run_crate_benchmark(opts):
     cursor.execute('REFRESH TABLE %s' % TMP_TABLE)
     cursor.execute('SELECT count(*) from %s' % TMP_TABLE)
     result = cursor.fetchone()
-    print >> stderr, '{0} records'.format(result[0])
+    print >> stderr, '{0} records in {1}s'.format(result[0], duration)
     cursor.execute(CLEAN_QUERY.rstrip(';'))
   return times
 
