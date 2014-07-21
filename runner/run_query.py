@@ -80,8 +80,11 @@ QUERY_4_HQL = """DROP TABLE IF EXISTS url_counts_partial;
 QUERY_4_HQL = " ".join(QUERY_4_HQL.replace("\n", "").split())
 
 QUERY_1_PRE = """CREATE TABLE %s ("pageURL" STRING, "pageRank" INT)""" % TMP_TABLE
+QUERY_1_PRE_NOINDEX = """CREATE TABLE %s ("pageURL" STRING INDEX OFF, "pageRank" INT INDEX OFF)""" % TMP_TABLE
 QUERY_2_PRE = """CREATE TABLE %s ("sourceIP" STRING, "adRevenue" DOUBLE)""" % TMP_TABLE
+QUERY_2_PRE_NOINDEX = """CREATE TABLE %s ("sourceIP" STRING INDEX OFF, "adRevenue" DOUBLE INDEX OFF)""" % TMP_TABLE
 QUERY_3_PRE = """CREATE TABLE %s ("sourceIP" STRING, "adRevenue" DOUBLE, "pageRank" DOUBLE)""" % TMP_TABLE
+QUERY_3_PRE_NOINDEX = """CREATE TABLE %s ("sourceIP" STRING INDEX OFF, "adRevenue" DOUBLE INDEX OFF, "pageRank" DOUBLE INDEX OFF)""" % TMP_TABLE
 
 QUERY_1a_SQL = QUERY_1a_HQL
 QUERY_1b_SQL = QUERY_1b_HQL
@@ -124,12 +127,12 @@ IMPALA_MAP = {'1a': QUERY_1_PRE, '1b': QUERY_1_PRE, '1c': QUERY_1_PRE,
               '2a': QUERY_2_PRE, '2b': QUERY_2_PRE, '2c': QUERY_2_PRE,
               '3a': QUERY_3_PRE, '3b': QUERY_3_PRE, '3c': QUERY_3_PRE}
 
-CRATE_MAP = {'1a': (crate_tmp_table(QUERY_1_PRE, 48), crate_insert_into_rankings(QUERY_1a_HQL)),
-             '1b': (crate_tmp_table(QUERY_1_PRE, 48), crate_insert_into_rankings(QUERY_1b_HQL)),
-             '1c': (crate_tmp_table(QUERY_1_PRE, 48), crate_insert_into_rankings(QUERY_1c_HQL)),
-             '2a': (crate_tmp_table(QUERY_2_PRE, 96), crate_insert_into_uservisits(QUERY_2a_HQL)),
-             '2b': (crate_tmp_table(QUERY_2_PRE, 96), crate_insert_into_uservisits(QUERY_2b_HQL)),
-             '2c': (crate_tmp_table(QUERY_2_PRE, 96), crate_insert_into_uservisits(QUERY_2c_HQL))}
+CRATE_MAP = {'1a': (crate_tmp_table(QUERY_1_PRE_NOINDEX, 48), crate_insert_into_rankings(QUERY_1a_HQL)),
+             '1b': (crate_tmp_table(QUERY_1_PRE_NOINDEX, 48), crate_insert_into_rankings(QUERY_1b_HQL)),
+             '1c': (crate_tmp_table(QUERY_1_PRE_NOINDEX, 48), crate_insert_into_rankings(QUERY_1c_HQL)),
+             '2a': (crate_tmp_table(QUERY_2_PRE_NOINDEX, 96), crate_insert_into_uservisits(QUERY_2a_HQL)),
+             '2b': (crate_tmp_table(QUERY_2_PRE_NOINDEX, 96), crate_insert_into_uservisits(QUERY_2b_HQL)),
+             '2c': (crate_tmp_table(QUERY_2_PRE_NOINDEX, 96), crate_insert_into_uservisits(QUERY_2c_HQL))}
 
 QUERY_MAP = {
              '1a':  (create_as(QUERY_1a_HQL), insert_into(QUERY_1a_HQL), 
