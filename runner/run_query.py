@@ -114,7 +114,7 @@ def create_as(query):
 def insert_into(query):
   return "INSERT INTO TABLE %s %s;" % (TMP_TABLE, query)
 
-def crate_tmp_table(query, num_shards=48):
+def crate_tmp_table(query, num_shards=8):
   return "%s clustered into %d shards WITH (number_of_replicas=0, refresh_interval=0)" % (query, num_shards)
 
 def crate_insert_into_rankings(query):
@@ -127,12 +127,12 @@ IMPALA_MAP = {'1a': QUERY_1_PRE, '1b': QUERY_1_PRE, '1c': QUERY_1_PRE,
               '2a': QUERY_2_PRE, '2b': QUERY_2_PRE, '2c': QUERY_2_PRE,
               '3a': QUERY_3_PRE, '3b': QUERY_3_PRE, '3c': QUERY_3_PRE}
 
-CRATE_MAP = {'1a': (crate_tmp_table(QUERY_1_PRE_NOINDEX, 48), crate_insert_into_rankings(QUERY_1a_HQL)),
-             '1b': (crate_tmp_table(QUERY_1_PRE_NOINDEX, 48), crate_insert_into_rankings(QUERY_1b_HQL)),
-             '1c': (crate_tmp_table(QUERY_1_PRE_NOINDEX, 48), crate_insert_into_rankings(QUERY_1c_HQL)),
-             '2a': (crate_tmp_table(QUERY_2_PRE_NOINDEX, 96), crate_insert_into_uservisits(QUERY_2a_HQL)),
-             '2b': (crate_tmp_table(QUERY_2_PRE_NOINDEX, 96), crate_insert_into_uservisits(QUERY_2b_HQL)),
-             '2c': (crate_tmp_table(QUERY_2_PRE_NOINDEX, 96), crate_insert_into_uservisits(QUERY_2c_HQL))}
+CRATE_MAP = {'1a': (crate_tmp_table(QUERY_1_PRE_NOINDEX), crate_insert_into_rankings(QUERY_1a_HQL)),
+             '1b': (crate_tmp_table(QUERY_1_PRE_NOINDEX), crate_insert_into_rankings(QUERY_1b_HQL)),
+             '1c': (crate_tmp_table(QUERY_1_PRE_NOINDEX), crate_insert_into_rankings(QUERY_1c_HQL)),
+             '2a': (crate_tmp_table(QUERY_2_PRE_NOINDEX), crate_insert_into_uservisits(QUERY_2a_HQL)),
+             '2b': (crate_tmp_table(QUERY_2_PRE_NOINDEX), crate_insert_into_uservisits(QUERY_2b_HQL)),
+             '2c': (crate_tmp_table(QUERY_2_PRE_NOINDEX), crate_insert_into_uservisits(QUERY_2c_HQL))}
 
 QUERY_MAP = {
              '1a':  (create_as(QUERY_1a_HQL), insert_into(QUERY_1a_HQL), 
